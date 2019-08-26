@@ -1,5 +1,5 @@
 import psutil
-import time
+import time, datetime
 
 PC = 'pc'
 
@@ -62,18 +62,19 @@ for key in disk_io.keys():
     monitor_dict[PC]['disks']['io_counters'][key]['busy_time'] = disk_io[key].busy_time
 
 #Network
+monitor_dict[PC]['network'] = {}
 monitor_dict[PC]['network']['io_counters'] = {}
 net_io = psutil.net_io_counters(pernic=True, nowrap=True)
 for key in net_io.keys():
     monitor_dict[PC]['network']['io_counters'][key] = {}
-    monitor_dict[PC]['network']['io_counters'][key]['bytes_sent'] = disk_io[key].bytes_sent
-    monitor_dict[PC]['network']['io_counters'][key]['bytes_recv'] = disk_io[key].bytes_recv
-    monitor_dict[PC]['network']['io_counters'][key]['packets_sent'] = disk_io[key].packets_sent
-    monitor_dict[PC]['network']['io_counters'][key]['packets_recv'] = disk_io[key].packets_recv
-    monitor_dict[PC]['network']['io_counters'][key]['errin'] = disk_io[key].errin
-    monitor_dict[PC]['network']['io_counters'][key]['errout'] = disk_io[key].errout
-    monitor_dict[PC]['network']['io_counters'][key]['dropin'] = disk_io[key].dropin
-    monitor_dict[PC]['network']['io_counters'][key]['dropout'] = disk_io[key].dropout
+    monitor_dict[PC]['network']['io_counters'][key]['bytes_sent'] = net_io[key].bytes_sent
+    monitor_dict[PC]['network']['io_counters'][key]['bytes_recv'] = net_io[key].bytes_recv
+    monitor_dict[PC]['network']['io_counters'][key]['packets_sent'] = net_io[key].packets_sent
+    monitor_dict[PC]['network']['io_counters'][key]['packets_recv'] = net_io[key].packets_recv
+    monitor_dict[PC]['network']['io_counters'][key]['errin'] = net_io[key].errin
+    monitor_dict[PC]['network']['io_counters'][key]['errout'] = net_io[key].errout
+    monitor_dict[PC]['network']['io_counters'][key]['dropin'] = net_io[key].dropin
+    monitor_dict[PC]['network']['io_counters'][key]['dropout'] = net_io[key].dropout
 
 monitor_dict[PC]['network']['connections'] = []
 net_connections = psutil.net_connections(kind='inet')
@@ -92,27 +93,57 @@ for key in net_stats.keys():
 
 print monitor_dict
 
-
-
 #Sensors
+def secs2hours(secs):
+    mm, ss = divmod(secs, 60)
+    hh, mm = divmod(mm, 60)
+    return "%d:%02d:%02d" % (hh, mm, ss)
+
+monitor_dict[PC]['sensors'] = {}
+monitor_dict[PC]['sensors']['temperatures'] = {}
 sensors_temperatures = psutil.sensors_temperatures(fahrenheit=False)
+for key in sensors_temperatures.keys():
+    monitor_dict[PC]['sensors']['temperatures'][key] = []
+    for sensors_temperature in sensors_temperatures[key]:
+        monitor_dict[PC]['sensors']['temperatures'][key].append({'label':sensors_temperature.label,
+        'current':sensors_temperature.current, 'high':sensors_temperature.high, 'critical':sensors_temperature.critical})
 
-sensor_fans = psutil.sensors_fans()
+monitor_dict[PC]['sensors']['fans'] = {}
+sensors_fans = psutil.sensors_fans()
+for key in sensors_fans.keys():
+    monitor_dict[PC]['sensors']['fans'][key] = []
+    for sensors_fan in sensors_fans[key]:
+        monitor_dict[PC]['sensors']['fans'][key].append({'label':sensors_fan.label,'current':sensors_fan.current})
 
+monitor_dict[PC]['sensors']['battery'] = {}
 sensor_battery = psutil.sensors_battery()
-
+if(sensor_battery):
+    monitor_dict[PC]['sensors']['battery']['percent'] = sensor_battery.percent
+    monitor_dict[PC]['sensors']['battery']['time_left'] = secs2hours(sensor_battery.secsleft)
+    monitor_dict[PC]['sensors']['battery']['power_plugged'] = sensor_battery.power_plugged
+else: 
+    monitor_dict[PC]['sensors']['battery'] = None
 
 #OtherSystemInfo
+monitor_dict[PC]['other_system_info'] = {}
 boot_time = psutil.boot_time()
+monitor_dict[PC]['other_system_info']['boot_time'] = datetime.datetime.fromtimestamp(boot_time).strftime("%Y-%m-%d %H:%M:%S")
 
+monitor_dict[PC]['other_system_info']['users'] = []
 users = psutil.users()
+for user in users:
+    monitor_dict[PC]['other_system_info']['users'].append({'name':user.name, 'terminal':user.terminal,
+    'host':user.host, 'started':user.started, 'pid':user.pid})
+
 
 #Process
+monitor_dict[PC]['process'] = []
 for proc in psutil.process_iter():
     try:
         pinfo = proc.as_dict(attrs=['pid', 'name', 'username', 'cpu_percent', 'status', 'nice', 'num_threads'])
     except psutil.NoSuchProcess:
         pass
     else:
-        pass
+        monitor_dict[PC]['process'].append(pinfo)
         #print(pinfo)
+print monitor_dict
